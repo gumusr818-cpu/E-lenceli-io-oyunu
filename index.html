@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Süper Eğlenceli 2D Oyun</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h2 {
+            margin: 5px 0;
+            font-size: 1.2rem;
+            color: #00ffcc;
+            text-shadow: 0 0 10px rgba(0,255,204,0.5);
+        }
+        canvas {
+            background: linear-gradient(to bottom, #1a1a2e, #16213e);
+            border: 3px solid #00ffcc;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+            cursor: pointer;
+            touch-action: none;
+        }
+        .controls {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>⚡ EĞLENCELİ ARCADE OYUNU ⚡</h2>
+    <canvas id="gameCanvas" width="360" height="540"></canvas>
+    <div class="controls">Paraları topla, kırmızı bombalardan kaç!<br>Parmağınla veya Fareyle sürükle.</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Oyun değişkenleri
+        let score = 0;
+        let isGameOver = false;
+
+        // Oyuncu (Kutucuk / Uzay Gemisi)
+        let player = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 70,
+            width: 40,
+            height: 40,
+            color: "#00ffcc",
+            speed: 5
+        };
+
+        // Düşen nesneler (Bombalar ve Paralar)
+        let items = [];
+        let spawnTimer = 0;
+
+        // Dokunma / Fare Kontrolleri
+        let isDragging = false;
+
+        canvas.addEventListener("pointerdown", (e) => {
+            isDragging = true;
+            updatePlayerPosition(e);
+        });
+
+        canvas.addEventListener("pointermove", (e) => {
+            if (isDragging) {
+                updatePlayerPosition(e);
+            }
+        });
+
+        window.addEventListener("pointerup", () => {
+            isDragging = false;
+        });
+
+        function updatePlayerPosition(e) {
+            const rect = canvas.getBoundingClientRect();
+            const root = document.documentElement;
+            // Canvas içi koordinatları hesapla
+            let mouseX = e.clientX - rect.left - canvas.clientLeft + canvas.scrollLeft;
+            player.x = mouseX - player.width / 2;
+
+            // Sınırları koru
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+        }
+
+        // Oyunu Yeniden Başlat
+        function restartGame() {
+            score = 0;
+            items = [];
+            spawnTimer = 0;
+            isGameOver = false;
+            player.x = canvas.width / 2 - player.width / 2;
+            loop();
+        }
+
+        // Nesne Üretme
+        function spawnItem() {
+            let isCoin = Math.random() > 0.3; // %70 para, %30 bomba
+            items.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                radius: isCoin ? 12 : 15,
+                speed: 3 + Math.random() * 3 + (score * 0.1),
+                type: isCoin ? "coin" : "bomb"
+            });
+        }
+
+        // Çarpışma Kontrolü (Daire - Kare)
+        function checkCollision(circle, rect) {
+            let closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.width));
+            let closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.height));
+            let distanceX = circle.x - closestX;
+            let distanceY = circle.y - closestY;
+            let distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+            return distanceSquared < (circle.radius * circle.radius);
+        }
+
+        // Oyun Döngüsü
+        function update() {
+            if (isGameOver) return;
+
+            // Nesne oluşturma sıklığı
+            spawnTimer++;
+            if (spawnTimer > 35) {
+                spawnItem();
+                spawnTimer = 0;
+            }
+
+            // Nesneleri hareket ettir
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += items[i].speed;
+
+                // Oyuncu ile çarpışma
+                if (checkCollision(items[i], player)) {
+                    if (items[i].type === "coin") {
+                        score += 10;
+                        items.splice(i, 1);
+                        continue;
+                    } else {
+                        // Bomba! Oyun bitti
+                        isGameOver = true;
+                    }
+                }
+
+                // Ekrandan çıkanları sil
+                if (items[i] && items[i].y > canvas.height + 30) {
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            // Ekranı temizle
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Oyuncuyu çiz
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = player.color;
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.shadowBlur = 0; // Gölgeyi kapat
+
+            // Nesneleri çiz
+            for (let i = 0; i < items.length; i++) {
+                let item = items[i];
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                if (item.type === "coin") {
+                    ctx.fillStyle = "#ffd700"; // Altın sarısı
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#ffd700";
+                } else {
+                    ctx.fillStyle = "#ff3366"; // Kırmızı bomba
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#ff3366";
+                }
+                ctx.fill();
+                ctx.closePath();
+                ctx.shadowBlur = 0;
+            }
+
+            // Skoru yazdır
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 18px sans-serif";
+            ctx.fillText("Skor: " + score, 15, 30);
+
+            // Oyun bittiyse ekranı
+            if (isGameOver) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#ff3366";
+                ctx.font = "bold 32px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("OYUN BİTTİ", canvas.width / 2, canvas.height / 2 - 30);
+
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "20px sans-serif";
+                ctx.fillText("Toplam Skorun: " + score, canvas.width / 2, canvas.height / 2 + 10);
+
+                ctx.fillStyle = "#00ffcc";
+                ctx.font = "16px sans-serif";
+                ctx.fillText("Tekrar oynamak için dokun", canvas.width / 2, canvas.height / 2 + 60);
+                ctx.textAlign = "left"; // Sıfırla
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            if (!isGameOver) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Oyun bittiğinde ekrana tıklayınca yeniden başlat
+        canvas.addEventListener("click", () => {
+            if (isGameOver) {
+                restartGame();
+            }
+        });
+
+        // Oyunu başlat
+        loop();
+    </script>
+</body>
+  </html>
+  
